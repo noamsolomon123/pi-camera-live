@@ -61,6 +61,7 @@ Run `pi/diagnose.sh`; it recommends one. Quick table:
 | If…                                       | On the Pi run                   | On the laptop run     |
 |-------------------------------------------|---------------------------------|-----------------------|
 | Normal (recommended)                      | `bash pi/stream.sh`             | `laptop\view.bat`     |
+| **Focusing the lens** (center zoom)       | `bash pi/stream-focus.sh`       | `laptop\view.bat`     |
 | Force the **new** command (Bookworm)      | `bash pi/stream-rpicam.sh`      | `laptop\view.bat`     |
 | Force the **old** command (Bullseye)      | `bash pi/stream-libcamera.sh`   | `laptop\view.bat`     |
 | H.264 looks black / glitchy               | `bash pi/stream-mjpeg.sh`       | `laptop\view.bat mjpeg` |
@@ -84,6 +85,12 @@ Camera mounted upside-down or sideways? Two ways:
   `-Rotate` accepts `0`, `90`, `180`, `270`.
 
 ---
+
+## Focusing the lens (resolution & zoom)
+
+- **Focus is the same at any resolution.** The lens position is what matters, not how many pixels are read out. Set it sharp in the live view and it'll be sharp in your full-res photos at that distance.
+- **Video resolution is smaller than photo resolution** (video mode is binned/cropped for speed) — that does **not** move the focus point. It only means you see less fine detail on screen.
+- **Don't crank max resolution to focus.** On the Zero 2 W that just adds lag and drops the framerate, making focusing harder. Instead use **`pi/stream-focus.sh`**, which digitally zooms into the center (`--roi`) so the smallest blur is obvious while staying smooth. Lower `ZOOM` (e.g. `0.25`) to magnify more.
 
 ## Want even less latency?
 
