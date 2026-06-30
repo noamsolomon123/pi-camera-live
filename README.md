@@ -54,6 +54,14 @@ A window pops up with the live camera. Turn the lens until it's sharp, then lock
 
 ---
 
+## Easiest viewer: the focus GUI (Windows)
+
+Prefer buttons over typing? Double-click **`laptop\focus-gui.bat`** for a tiny control panel:
+- **host / port / fps** fields, big **▶ Live** / **■ Stop** buttons
+- **Zoom** slider (magnify the centre to nail focus) + **Rotate** (0/90/180/270), applied live
+
+It does **not** add latency — the panel just launches `ffplay` (the lowest-latency player) with the tuned low-latency flags, and the video shows in ffplay's own window. Start a stream on the Pi first (`bash pi/stream-focus.sh` is best for focusing), then click **▶ Live**.
+
 ## Which stream script? (the fallbacks you asked for)
 
 Run `pi/diagnose.sh`; it recommends one. Quick table:
