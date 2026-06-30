@@ -62,6 +62,17 @@ Prefer buttons over typing? Double-click **`laptop\focus-gui.bat`** for a tiny c
 
 It does **not** add latency — the panel just launches `ffplay` (the lowest-latency player) with the tuned low-latency flags, and the video shows in ffplay's own window. Start a stream on the Pi first (`bash pi/stream-focus.sh` is best for focusing), then click **▶ Live**.
 
+## Browser WebUI (double-click) — camera + settings in the browser
+
+Want it all in a browser instead of a player window?
+
+1. **On the Pi** (once, over SSH): `python3 pi/webui.py` — it prints the URL(s) to open.
+2. **On the laptop**: double-click **`laptop\open-webui.bat`**, type the Pi's IP (or Enter for `raspberrypi.local`), and the browser opens the live view + settings: **resolution, FPS, zoom (focus aid), rotate, flip** — all applied live.
+
+It streams **MJPEG over HTTP** — each frame is an independent JPEG in an `<img>`, so there's no decode buffer = very low latency (~150–250 ms). Lower the resolution / raise the zoom for the snappiest focusing. **No installs on the Pi** (Python stdlib only).
+
+> This also dodges the `raspberrypi.local` problem — just type the Pi's IP into the launcher.
+
 ## Which stream script? (the fallbacks you asked for)
 
 Run `pi/diagnose.sh`; it recommends one. Quick table:
