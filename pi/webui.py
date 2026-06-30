@@ -33,7 +33,6 @@ class Cam:
             except Exception: pass
 
     def watch(self):
-        # auto-recovery: if no frame for 3s, kill the camera so loop() respawns it
         while True:
             time.sleep(1)
             p = self.proc
@@ -54,13 +53,13 @@ class Cam:
                 if not ch: break
                 buf += ch
                 while True:
-                    a = buf.find(b"\xff\xd8")          # JPEG start
+                    a = buf.find(b"\xff\xd8")
                     if a < 0:
                         if len(buf) > 4000000: buf = b""
                         break
-                    e = buf.find(b"\xff\xd9", a + 2)    # JPEG end
+                    e = buf.find(b"\xff\xd9", a + 2)
                     if e < 0:
-                        if a > 0: buf = buf[a:]         # drop junk before a frame start
+                        if a > 0: buf = buf[a:]
                         break
                     with self.cv:
                         self.frame = buf[a:e + 2]; self.last = time.monotonic(); self.cv.notify_all()
@@ -75,7 +74,31 @@ class Cam:
 
 cam = Cam()
 
-PAGE = b'<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Pi Cam</title><style>body{margin:0;background:#111;color:#eee;font-family:sans-serif;text-align:center}img{max-width:100%;max-height:80vh;background:#000}.bar{padding:8px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;align-items:center}button,select{padding:6px 10px;background:#2a2a2a;color:#eee;border:1px solid #555;border-radius:6px}</style><img id=v src="/stream.mjpg"><div class=bar><select id=res onchange=a()><option>640x480<option>1280x720<option selected>1920x1080</select><select id=fps onchange=a()><option>15<option selected>30<option>60</select><label>zoom <input id=z type=range min=1 max=6 step=.5 value=1 onchange=a()></label><button onclick="r(0)">0</button><button onclick="r(90)">90</button><button onclick="r(180)">180</button><button onclick="r(270)">270</button><button id=bh onclick="fl(0)">flipH</button><button id=bv onclick="fl(1)">flipV</button></div><script>let cr=0,rot=0,hf=0,vf=1;bv.style.background="#2ea043";function a(){let s=res.value.split("x");fetch("/set?width="+s[0]+"&height="+s[1]+"&fps="+fps.value+"&zoom="+z.value+"&rotation="+rot+"&hflip="+hf+"&vflip="+vf)}function r(d){if(d==180){rot=180;cr=0}else{rot=0;cr=d}v.style.transform="rotate("+cr+"deg)";a()}function fl(k){if(k==0){hf=hf?0:1;bh.style.background=hf?"#2ea043":""}else{vf=vf?0:1;bv.style.background=vf?"#2ea043":""}a()}</script>'
+PAGE = b"""<!doctype html><meta charset=utf-8>
+<meta name=viewport content="width=device-width,initial-scale=1"><title>Pi Cam</title>
+<style>
+body{margin:0;background:#111;color:#eee;font-family:sans-serif;text-align:center}
+img{max-width:100%;max-height:80vh;background:#000}
+.bar{padding:8px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;align-items:center}
+button,select{padding:6px 10px;background:#2a2a2a;color:#eee;border:1px solid #555;border-radius:6px}
+</style>
+<img id=v src="/stream.mjpg">
+<div class=bar>
+<select id=res onchange=a()><option>640x480<option>1280x720<option selected>1920x1080</select>
+<select id=fps onchange=a()><option>15<option selected>30<option>60</select>
+<label>zoom <input id=z type=range min=1 max=6 step=.5 value=1 onchange=a()></label>
+<button onclick="r(0)">0</button><button onclick="r(90)">90</button>
+<button onclick="r(180)">180</button><button onclick="r(270)">270</button>
+<button id=bh onclick="fl(0)">flipH</button><button id=bv onclick="fl(1)">flipV</button>
+</div>
+<script>
+let cr=0,rot=0,hf=0,vf=1;bv.style.background="#2ea043";
+function a(){var s=res.value.split("x");
+fetch("/set?width="+s[0]+"&height="+s[1]+"&fps="+fps.value+"&zoom="+z.value+"&rotation="+rot+"&hflip="+hf+"&vflip="+vf)}
+function r(d){if(d==180){rot=180;cr=0}else{rot=0;cr=d}v.style.transform="rotate("+cr+"deg)";a()}
+function fl(k){if(k==0){hf=hf?0:1;bh.style.background=hf?"#2ea043":""}
+else{vf=vf?0:1;bv.style.background=vf?"#2ea043":""}a()}
+</script>"""
 
 
 class H(http.server.BaseHTTPRequestHandler):
