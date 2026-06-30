@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-# pi-camera-live WebUI - live MJPEG + settings over HTTP (lowest browser latency).
-# Run on the Pi:   python3 webui.py
-# Open on laptop:  http://10.55.0.1:8080/   (over the USB cable)
+# pi-camera-live WebUI - live MJPEG + settings. Defaults: 1920x1080, flipV on.
+# Run on the Pi:  python3 webui.py      Open:  http://10.55.0.1:8080/  (USB)
 import http.server, socketserver, subprocess, threading, shutil, urllib.parse, time
 
 PORT = 8080
-S = {"width": 1280, "height": 720, "fps": 30, "rotation": 0, "hflip": 0, "vflip": 0, "zoom": 1.0}
+S = {"width": 1920, "height": 1080, "fps": 30, "rotation": 0, "hflip": 0, "vflip": 1, "zoom": 1.0}
 
 
 def cmd():
@@ -23,40 +22,50 @@ def cmd():
 
 class Cam:
     def __init__(self):
-        self.proc = None; self.frame = None; self.cv = threading.Condition()
+        self.proc = None; self.frame = None; self.cv = threading.Condition(); self.last = 0.0
         threading.Thread(target=self.loop, daemon=True).start()
+        threading.Thread(target=self.watch, daemon=True).start()
 
     def restart(self):
-        if self.proc:
-            try: self.proc.kill()
+        p = self.proc
+        if p:
+            try: p.kill()
             except Exception: pass
+
+    def watch(self):
+        # auto-recovery: if no frame for 3s, kill the camera so loop() respawns it
+        while True:
+            time.sleep(1)
+            p = self.proc
+            if p and self.last and time.monotonic() - self.last > 3:
+                try: p.kill()
+                except Exception: pass
 
     def loop(self):
         while True:
             try:
                 self.proc = subprocess.Popen(cmd(), stdout=subprocess.PIPE,
-                                             stderr=subprocess.PIPE, bufsize=0)
+                                             stderr=subprocess.DEVNULL, bufsize=0)
             except FileNotFoundError:
-                print("ERROR: no rpicam-vid / libcamera-vid found"); return
-            buf = b""
+                print("ERROR: no rpicam-vid / libcamera-vid"); return
+            self.last = time.monotonic(); buf = b""
             while True:
                 ch = self.proc.stdout.read(4096)
                 if not ch: break
                 buf += ch
                 while True:
-                    a = buf.find(b"\xff\xd8")
-                    b = buf.find(b"\xff\xd8", a + 2) if a >= 0 else -1
-                    if a < 0 or b < 0: break
+                    a = buf.find(b"\xff\xd8")          # JPEG start
+                    if a < 0:
+                        if len(buf) > 4000000: buf = b""
+                        break
+                    e = buf.find(b"\xff\xd9", a + 2)    # JPEG end
+                    if e < 0:
+                        if a > 0: buf = buf[a:]         # drop junk before a frame start
+                        break
                     with self.cv:
-                        self.frame = buf[a:b]; self.cv.notify_all()
-                    buf = buf[b:]
-            # the camera process ended (e.g. failed to open) -> show why
-            err = (self.proc.stderr.read() or b"").decode("utf-8", "replace").strip()
-            if err:
-                print("---- camera stopped; error tail ----")
-                print(err[-800:])
-                print("------------------------------------")
-            time.sleep(0.3)
+                        self.frame = buf[a:e + 2]; self.last = time.monotonic(); self.cv.notify_all()
+                    buf = buf[e + 2:]
+            time.sleep(0.2)
 
     def get(self, last):
         with self.cv:
@@ -66,28 +75,7 @@ class Cam:
 
 cam = Cam()
 
-PAGE = b"""<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
-<title>Pi Cam - Focus</title>
-<style>body{margin:0;background:#111;color:#eee;font-family:sans-serif;text-align:center}
-img{max-width:100%;max-height:80vh;background:#000}
-.bar{padding:8px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;align-items:center}
-button,select{padding:6px 10px;background:#2a2a2a;color:#eee;border:1px solid #555;border-radius:6px}</style>
-<img id=v src="/stream.mjpg">
-<div class=bar>
-<select id=res onchange=a()><option>640x480<option selected>1280x720<option>1920x1080</select>
-<select id=fps onchange=a()><option>15<option selected>30<option>60</select>
-<label>zoom <input id=z type=range min=1 max=6 step=.5 value=1 onchange=a()></label>
-<button onclick="r(0)">0</button><button onclick="r(90)">90</button>
-<button onclick="r(180)">180</button><button onclick="r(270)">270</button>
-<button onclick="fl('hflip')">flipH</button><button onclick="fl('vflip')">flipV</button>
-</div>
-<script>
-let cr=0,rot=0,hf=0,vf=0;
-function a(){let[w,h]=res.value.split('x');
- fetch('/set?width='+w+'&height='+h+'&fps='+fps.value+'&zoom='+z.value+'&rotation='+rot+'&hflip='+hf+'&vflip='+vf)}
-function r(d){if(d==180){rot=180;cr=0}else{rot=0;cr=d}v.style.transform='rotate('+cr+'deg)';a()}
-function fl(k){if(k=='hflip')hf=hf?0:1;else vf=vf?0:1;a()}
-</script>"""
+PAGE = b'<!doctype html><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Pi Cam</title><style>body{margin:0;background:#111;color:#eee;font-family:sans-serif;text-align:center}img{max-width:100%;max-height:80vh;background:#000}.bar{padding:8px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;align-items:center}button,select{padding:6px 10px;background:#2a2a2a;color:#eee;border:1px solid #555;border-radius:6px}</style><img id=v src="/stream.mjpg"><div class=bar><select id=res onchange=a()><option>640x480<option>1280x720<option selected>1920x1080</select><select id=fps onchange=a()><option>15<option selected>30<option>60</select><label>zoom <input id=z type=range min=1 max=6 step=.5 value=1 onchange=a()></label><button onclick="r(0)">0</button><button onclick="r(90)">90</button><button onclick="r(180)">180</button><button onclick="r(270)">270</button><button id=bh onclick="fl(0)">flipH</button><button id=bv onclick="fl(1)">flipV</button></div><script>let cr=0,rot=0,hf=0,vf=1;bv.style.background="#2ea043";function a(){let s=res.value.split("x");fetch("/set?width="+s[0]+"&height="+s[1]+"&fps="+fps.value+"&zoom="+z.value+"&rotation="+rot+"&hflip="+hf+"&vflip="+vf)}function r(d){if(d==180){rot=180;cr=0}else{rot=0;cr=d}v.style.transform="rotate("+cr+"deg)";a()}function fl(k){if(k==0){hf=hf?0:1;bh.style.background=hf?"#2ea043":""}else{vf=vf?0:1;bv.style.background=vf?"#2ea043":""}a()}</script>'
 
 
 class H(http.server.BaseHTTPRequestHandler):
