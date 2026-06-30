@@ -35,7 +35,7 @@ class Cam:
         while True:
             try:
                 self.proc = subprocess.Popen(cmd(), stdout=subprocess.PIPE,
-                                             stderr=subprocess.DEVNULL, bufsize=0)
+                                             stderr=subprocess.PIPE, bufsize=0)
             except FileNotFoundError:
                 print("ERROR: no rpicam-vid / libcamera-vid found"); return
             buf = b""
@@ -50,7 +50,13 @@ class Cam:
                     with self.cv:
                         self.frame = buf[a:b]; self.cv.notify_all()
                     buf = buf[b:]
-            time.sleep(0.2)
+            # the camera process ended (e.g. failed to open) -> show why
+            err = (self.proc.stderr.read() or b"").decode("utf-8", "replace").strip()
+            if err:
+                print("---- camera stopped; error tail ----")
+                print(err[-800:])
+                print("------------------------------------")
+            time.sleep(0.3)
 
     def get(self, last):
         with self.cv:
@@ -106,7 +112,8 @@ class H(http.server.BaseHTTPRequestHandler):
                 while True:
                     fr = cam.get(last); last = fr
                     if fr is None: continue
-                    self.wfile.write(b"--F\r\nContent-Type: image/jpeg\r\n\r\n" + fr + b"\r\n")
+                    self.wfile.write(b"--F\r\nContent-Type: image/jpeg\r\nContent-Length: " +
+                                     str(len(fr)).encode() + b"\r\n\r\n" + fr + b"\r\n")
             except (BrokenPipeError, ConnectionResetError):
                 pass
         else:
